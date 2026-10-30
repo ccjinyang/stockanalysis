@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Volume Atlas — Stock charts</title>
+  <meta name="description" content="Daily stock charts with volume and an estimated volume profile.">
+  <link rel="stylesheet" href="/styles.css">
+  <script defer src="/math.js"></script><script defer src="/chart.js"></script>
+</head>
+<body>
+  <header class="masthead"><a class="brand" href="/"><span class="mark">▥</span> Volume Atlas</a><span class="eyebrow">PRICE HAS A HISTORY. VOLUME LEAVES A TRACE.</span><span class="local">● LOCAL RESEARCH</span></header>
+  <main>
+    <section class="intro"><div><p class="eyebrow">THE MARKET, IN CONTEXT</p><h1>See where the trading happened.</h1><p class="muted">Price action. Trading activity. A different view of every level.</p></div><div class="edition">01 / STOCK EXPLORER<br><span>Daily / weekly / monthly · Volume profile</span></div></section>
+    <form id="search" class="toolbar">
+      <label class="ticker-label" for="ticker">TICKER <input id="ticker" name="ticker" maxlength="20" value="AMZN" placeholder="AMZN" required autocomplete="off" spellcheck="false"></label>
+      <label for="range">HISTORY <select id="range"><option value="3mo">3 months</option><option value="6mo">6 months</option><option value="1y">1 year</option><option value="2y">2 years</option><option value="5y" selected>5 years</option><option value="10y">10 years</option></select></label>
+      <label for="interval">CANDLES <select id="interval"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
+      <button id="load" class="primary" type="submit">Generate chart ↗</button>
+      <div class="toolbar-spacer"></div><label class="check"><input id="auto" type="checkbox"> Refresh every 5 min</label>
+      <button id="export" type="button" disabled>Download PNG ↓</button>
+    </form>
+    <div id="status" class="status" role="status" aria-live="polite">Enter a ticker to begin.</div>
+    <section class="chart-card" aria-label="Stock chart">
+      <div class="quote-row"><div><div class="symbol-line"><h2 id="symbol">—</h2><span id="exchange" class="tag">1D</span></div><p id="company" class="muted">Daily stock history</p></div><div class="quote"><strong id="price">—</strong><span id="change">Latest daily bar</span></div></div>
+      <div class="chart-options"><div class="legend"><span><i class="green"></i>Price candles</span><span><i class="teal"></i>Est. volume profile</span><span><i class="gold"></i>Point of control</span><span><i class="gray"></i>Volume by candle</span></div><div class="view-controls"><label class="check"><input id="log" type="checkbox"> Log scale</label><button id="zoom-in" type="button" title="Zoom in" disabled>+</button><button id="zoom-out" type="button" title="Zoom out" disabled>−</button><button id="reset" type="button" disabled>Reset view</button></div></div>
+      <div class="canvas-wrap"><canvas id="chart" tabindex="0" aria-label="Candlestick chart with estimated volume profile and volume. Use plus and minus to zoom, arrow keys to pan, and Home to reset."></canvas><div id="empty">Your next perspective starts with a ticker.</div><div id="candle-tooltip" role="tooltip" hidden><strong id="tooltip-date"></strong><div><span>Open</span><b id="tooltip-open"></b></div><div><span>High</span><b id="tooltip-high"></b></div><div><span>Low</span><b id="tooltip-low"></b></div><div><span>Close</span><b id="tooltip-close"></b></div><div><span>Volume</span><b id="tooltip-volume"></b></div></div></div>
+      <div id="readout" class="readout" aria-live="off">Hover over a trading day to inspect open, high, low, close, and volume.</div>
+      <div class="chart-footer"><span id="dates">—</span><span>Scroll to zoom · Drag to pan · Double-click to reset</span></div>
+    </section>
+    <section class="metrics" aria-label="Visible range statistics"><div><span>VISIBLE RANGE VOLUME</span><strong id="total-volume">—</strong><small>Shares traded across displayed days</small></div><div><span>ESTIMATED POINT OF CONTROL</span><strong id="poc">—</strong><small>Price bin with the most estimated volume</small></div><div><span>LATEST DAY VOLUME</span><strong id="day-volume">—</strong><small id="volume-ratio">Relative to previous 20 available days</small></div></section>
+    <details class="method"><summary>How to read this chart <span>＋</span></summary><div class="method-grid"><p><b>Bottom bars: volume by candle.</b> Taller bars show more shares traded in the selected day, week, or month. Weekly candles group Monday-start weeks; monthly candles group calendar months. Periods at the edges may be partial. Green means the close was at or above the open; red means it was below. They do not measure buying versus selling.</p><p><b>Left bars: estimated volume by price.</b> Each day's volume is distributed uniformly from its low to its high, weighted by overlap with each price bin. The profile recalculates as you zoom or pan. It is an approximation, not transaction-level volume.</p><p><b>Gold line: point of control.</b> The center of the highest-volume estimated bin. This is a historical reference, not a predicted support level. Prices use the provider's split-adjusted OHLC without dividend adjustment; the newest daily bar may still be forming.</p></div></details>
+    <details class="method"><summary>Recent candles <span>＋</span></summary><div class="table-scroll"><table><caption id="recent-caption">Latest 10 available daily candles</caption><thead><tr><th>Date / period</th><th>Open</th><th>High</th><th>Low</th><th>Close</th><th>Volume</th></tr></thead><tbody id="recent"></tbody></table></div></details>
+    <footer><span>VOLUME ATLAS <span class="muted">/ A closer look at the market</span></span><span>Yahoo Finance · May be delayed · Personal research</span></footer>
+  </main>
+</body>
+</html>
