@@ -1,0 +1,9 @@
+.venv/
+__pycache__/
+*.pyc
+.DS_Store
+.wheelhouse-server.log
+*.log
+.env
+.env.*
+!.env.example
