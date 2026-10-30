@@ -7,3 +7,17 @@ __pycache__/
 .env
 .env.*
 !.env.example
+
+# Other local features are not part of this repository.
+/engine.py
+/ibkr.py
+/server.py
+/requirements.txt
+/dist/
+/tests/test_engine.py
+/docs/learn.jpg
+/docs/screener.jpg
+/docs/wheelhouse-local.md
+
+# Local preview screenshots and other-feature documentation.
+/docs/
