@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import math
+import os
 from pathlib import Path
 import re
 import threading
@@ -194,8 +195,11 @@ class Handler(SimpleHTTPRequestHandler):
 
     def do_GET(self):
         port = self.server.server_address[1]
-        if self.headers.get('Host') not in (f'127.0.0.1:{port}', f'localhost:{port}'):
-            return self.respond(403, {'error': 'Local access only.'})
+        allowed_hosts = {f'127.0.0.1:{port}', f'localhost:{port}'}
+        if self.server.render_hostname:
+            allowed_hosts.add(self.server.render_hostname)
+        if self.headers.get('Host', '').lower() not in allowed_hosts:
+            return self.respond(403, {'error': 'Host not allowed.'})
         path = urlsplit(self.path)
         if path.path == '/api/health':
             return self.respond(200, {'status': 'ok', 'defaultTicker': self.server.default_ticker})
@@ -217,7 +221,8 @@ class Handler(SimpleHTTPRequestHandler):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument('--port', type=int, default=8766)
+    render_hostname = os.environ.get('RENDER_EXTERNAL_HOSTNAME', '').strip().lower()
+    parser.add_argument('--port', type=int, default=os.environ.get('PORT', '10000') if render_hostname else 8766)
     parser.add_argument('--ticker', default='AMZN')
     args = parser.parse_args()
     try:
@@ -226,9 +231,12 @@ def main():
             raise ValueError('Port must be between 1 and 65535.')
     except ValueError as exc:
         parser.error(str(exc))
-    server = ThreadingHTTPServer(('127.0.0.1', args.port), Handler)
+    bind_host = '0.0.0.0' if render_hostname else '127.0.0.1'
+    server = ThreadingHTTPServer((bind_host, args.port), Handler)
+    server.render_hostname = render_hostname
     server.default_ticker = symbol
-    print(f'Volume Atlas → http://127.0.0.1:{args.port}/ · default {symbol}', flush=True)
+    url = f'https://{render_hostname}/' if render_hostname else f'http://127.0.0.1:{args.port}/'
+    print(f'Volume Atlas → {url} · default {symbol}', flush=True)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
