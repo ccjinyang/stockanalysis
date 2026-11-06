@@ -21,6 +21,7 @@ def fixture():
 class ChartServiceTests(unittest.TestCase):
     def setUp(self):
         service.CACHE.clear()
+        service.PE_CACHE.clear()
 
     def test_symbols_and_ranges(self):
         for ticker in ('amzn', 'BRK-B', 'SHOP.TO', '^GSPC'):
@@ -71,6 +72,54 @@ class ChartServiceTests(unittest.TestCase):
                 service.fetch_history('AMZN', '5y')
             self.assertEqual(provider.call_count, 2)
             self.assertFalse(service.CACHE)
+
+    def test_forward_pe_prefers_monthly_filters_and_sorts(self):
+        def point(date, value):
+            return {'asOfDate': date, 'reportedValue': {'raw': value}}
+        payload = {'timeseries': {'result': [
+            {'quarterlyForwardPeRatio': [point('2024-03-31', 22), point('2024-06-30', 25)]},
+            {'monthlyForwardPeRatio': [point('2024-06-30', 24), point('2024-05-31', 23),
+                                      point('2024-07-31', 0), point('2024-08-31', -5),
+                                      point('2024-09-30', float('nan')), point('2024-10-31', True),
+                                      point('2024-02-30', 10), point('2024-12-31', 30)]},
+        ]}}
+        result = service.normalize_forward_pe(payload, 'AMZN', '2024-03-01', '2024-11-01')
+        self.assertEqual(result['status'], 'ok')
+        self.assertEqual([(p['date'], p['value']) for p in result['points']],
+                         [('2024-03-31', 22), ('2024-05-31', 23), ('2024-06-30', 24)])
+        self.assertEqual(result['points'][-1]['frequency'], 'monthly')
+
+    def test_forward_pe_does_not_substitute_trailing_pe(self):
+        payload = {'timeseries': {'result': [{'monthlyPeRatio': [
+            {'asOfDate': '2024-03-31', 'reportedValue': {'raw': 20}}]}]}}
+        result = service.normalize_forward_pe(payload, 'SOXX', '2024-01-01', '2024-12-31')
+        self.assertEqual(result['status'], 'unavailable')
+        self.assertEqual(result['points'], [])
+        self.assertIn('No historical', result['message'])
+
+    def test_forward_pe_provider_error_is_not_missing_coverage(self):
+        with self.assertRaises(service.DataUnavailable):
+            service.normalize_forward_pe({'timeseries': {'error': {'code': 'Unauthorized'}}},
+                                         'AMZN', '2024-01-01', '2024-12-31')
+
+    def test_forward_pe_has_own_cache(self):
+        payload = {'timeseries': {'result': []}}
+        with patch.object(service, 'urlopen', side_effect=lambda *a, **kw: io.BytesIO(json.dumps(payload).encode())) as provider:
+            self.assertFalse(service.fetch_forward_pe('SOXX', '1y')['cached'])
+            self.assertTrue(service.fetch_forward_pe('SOXX', '1y')['cached'])
+            self.assertEqual(provider.call_count, 1)
+            request = provider.call_args[0][0]
+            self.assertIn('monthlyForwardPeRatio', request.full_url)
+            self.assertFalse(service.CACHE)
+            service.PE_CACHE[('SOXX', '1y')] = (service.time.monotonic() - service.PE_CACHE_SECONDS - 1, {})
+            self.assertFalse(service.fetch_forward_pe('SOXX', '1y')['cached'])
+            self.assertEqual(provider.call_count, 2)
+
+    def test_forward_pe_outage_is_an_error(self):
+        with patch.object(service, 'urlopen', side_effect=URLError('offline')):
+            with self.assertRaisesRegex(service.DataUnavailable, 'could not be retrieved'):
+                service.fetch_forward_pe('AMZN', '1y')
+            self.assertFalse(service.PE_CACHE)
 
 
 if __name__ == '__main__':

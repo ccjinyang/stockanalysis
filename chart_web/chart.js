@@ -43,7 +43,7 @@ async function load(ticker = $('ticker').value, range = $('range').value, preser
   if (controller) controller.abort();
   controller = new AbortController();
   busy = true;
-  $('load').disabled = true;
+  $('search').setAttribute('aria-busy', 'true');
   status(`Fetching ${ticker.toUpperCase()} daily history…`);
   try {
     const response = await fetch(`/api/chart?${new URLSearchParams({ticker, range})}`, {signal: controller.signal});
@@ -76,11 +76,12 @@ async function load(ticker = $('ticker').value, range = $('range').value, preser
     for (const button of ['export', 'zoom-in', 'zoom-out', 'reset']) $(button).disabled = false;
     status(`${result.source} · Last bar ${latest.date} (${result.timezone}) · Retrieved ${new Date(result.fetchedAt).toLocaleString()}${result.cached ? ' · Cached' : ''} · May be delayed; newest bar may be incomplete.`);
     rememberView();
+    PEChart.load(result.symbol, range);
     render();
   } catch (error) {
     if (error.name !== 'AbortError') status(`${error.message}${data ? ` Still displaying ${data.symbol}; chart has not changed.` : ''}`, true);
   } finally {
-    if (id === requestId) {busy = false; $('load').disabled = false;}
+    if (id === requestId) {busy = false; $('search').setAttribute('aria-busy', 'false');}
   }
 }
 
@@ -187,6 +188,7 @@ function render() {
   $('dates').textContent = `${bars[0].date} — ${bars.at(-1).endDate}`;
   $('total-volume').textContent = compact(profile.total);
   $('poc').textContent = `${price(profile.poc)} ${data.currency}`;
+  PEChart.setRange(bars, hover !== null ? data.bars[hover]?.date : null);
 }
 
 function zoom(factor, anchor = .5) {
@@ -200,13 +202,11 @@ function zoom(factor, anchor = .5) {
 function reset() {if (data) {start = 0; end = data.bars.length; hover = null; render();}}
 $('search').addEventListener('submit', event => {event.preventDefault(); load();});
 $('log').addEventListener('change', render);
-$('interval').addEventListener('change', () => {
-  if (!rawData) return;
-  setCandles(); start = 0; end = data.bars.length; rememberView(); render();
-});
+for (const control of ['range', 'interval']) $(control).addEventListener('change', () => load());
 $('zoom-in').addEventListener('click', () => zoom(.7));
 $('zoom-out').addEventListener('click', () => zoom(1.4));
 $('reset').addEventListener('click', reset);
+$('pe-retry').addEventListener('click', () => {if (data) PEChart.load(activeTicker, activeRange);});
 canvas.addEventListener('dblclick', reset);
 canvas.addEventListener('wheel', event => {
   if (!data || !geometry) return;

@@ -4,7 +4,7 @@ Run: python3 chart_service.py --ticker AMZN --port 8766
 """
 import argparse
 from collections import OrderedDict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 import json
 import math
@@ -22,6 +22,72 @@ RANGES = ('3mo', '6mo', '1y', '2y', '5y', '10y')
 CACHE = OrderedDict()
 CACHE_LOCK = threading.Lock()
 CACHE_SECONDS = 300
+PE_CACHE = OrderedDict()
+PE_LOCK = threading.Lock()
+PE_CACHE_SECONDS = 3600
+
+
+def normalize_forward_pe(payload, symbol, first_date, last_date):
+    """Return dated provider observations, never reconstructed daily estimates."""
+    series = payload.get('timeseries') or {}
+    if series.get('error'):
+        raise DataUnavailable('The valuation provider could not return forward P/E history.')
+    points = {}
+    # Prefer monthly observations when both frequencies contain the same date.
+    for kind in ('quarterly', 'monthly'):
+        for item in series.get('result') or []:
+            for point in item.get(kind + 'ForwardPeRatio') or []:
+                try:
+                    date = point['asOfDate']
+                    if datetime.strptime(date, '%Y-%m-%d').date().isoformat() != date:
+                        continue
+                    value = point['reportedValue']['raw']
+                    if not first_date <= date <= last_date:
+                        continue
+                    if isinstance(value, bool) or not isinstance(value, (float, int)) or not math.isfinite(value) or value <= 0:
+                        continue
+                    points[date] = dict(date=date, value=value, frequency=kind)
+                except (KeyError, TypeError, ValueError):
+                    continue
+    observations = [points[d] for d in sorted(points)]
+    return dict(symbol=symbol, points=observations,
+                status='ok' if observations else 'unavailable',
+                message='' if observations else 'No historical forward P/E observations are available for this ticker and history range. ETFs and other non-company securities may not have this data.',
+                source='Yahoo Finance · reported forward P/E',
+                fetchedAt=datetime.now(timezone.utc).isoformat(),
+                methodology='Monthly observations supplemented by quarterly values. Sparse coverage; no daily estimates or forward-filling. Provider values may be revised; not a point-in-time backtest dataset.')
+
+
+def fetch_forward_pe(symbol, period):
+    now = datetime.now(timezone.utc)
+    days = {'3mo': 93, '6mo': 186, '1y': 366, '2y': 732, '5y': 1830, '10y': 3660}[period]
+    first = now - timedelta(days=days)
+    key = (symbol, period)
+    with PE_LOCK:
+        cached = PE_CACHE.get(key)
+        if cached and time.monotonic() - cached[0] < PE_CACHE_SECONDS:
+            PE_CACHE.move_to_end(key)
+            return dict(cached[1], cached=True)
+        query = urlencode(dict(type='monthlyForwardPeRatio,quarterlyForwardPeRatio',
+                               period1=int(first.timestamp()), period2=int((now + timedelta(days=1)).timestamp())))
+        last_error = None
+        for host in ('query1.finance.yahoo.com', 'query2.finance.yahoo.com'):
+            request = Request(f'https://{host}/ws/fundamentals-timeseries/v1/finance/timeseries/{quote(symbol, safe="")}?{query}',
+                              headers={'User-Agent': 'Mozilla/5.0', 'Accept': 'application/json'})
+            try:
+                with urlopen(request, timeout=15) as response:
+                    payload = json.load(response)
+                result = normalize_forward_pe(payload, symbol, first.date().isoformat(), now.date().isoformat())
+                PE_CACHE[key] = (time.monotonic(), result)
+                PE_CACHE.move_to_end(key)
+                while len(PE_CACHE) > 32:
+                    PE_CACHE.popitem(last=False)
+                return dict(result, cached=False)
+            except HTTPError as exc:
+                last_error = f'provider HTTP {exc.code}'
+            except (URLError, TimeoutError, OSError, ValueError, KeyError, TypeError, DataUnavailable) as exc:
+                last_error = type(exc).__name__
+        raise DataUnavailable(f'Forward P/E history could not be retrieved ({last_error}). Retry later.')
 
 
 class DataUnavailable(Exception):
@@ -133,17 +199,18 @@ class Handler(SimpleHTTPRequestHandler):
         path = urlsplit(self.path)
         if path.path == '/api/health':
             return self.respond(200, {'status': 'ok', 'defaultTicker': self.server.default_ticker})
-        if path.path == '/api/chart':
+        if path.path in ('/api/chart', '/api/forward-pe'):
             params = parse_qs(path.query, keep_blank_values=True)
             try:
                 period = params.get('range', ['5y'])[0]
                 symbol = validate(params.get('ticker', [self.server.default_ticker])[0], period)
-                return self.respond(200, fetch_history(symbol, period))
+                fetch = fetch_forward_pe if path.path == '/api/forward-pe' else fetch_history
+                return self.respond(200, fetch(symbol, period))
             except ValueError as exc:
                 return self.respond(400, {'error': str(exc)})
             except DataUnavailable as exc:
                 return self.respond(502, {'error': str(exc)})
-        if path.path not in ('/', '/index.html', '/chart.js', '/math.js', '/styles.css'):
+        if path.path not in ('/', '/index.html', '/chart.js', '/math.js', '/pe.js', '/styles.css'):
             return self.respond(404, {'error': 'Not found.'})
         return super().do_GET()
 

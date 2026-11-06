@@ -18,7 +18,7 @@ nohup python3 -u chart_service.py --ticker AMZN --port 8766 > /tmp/volume-atlas.
 
 This detached command survives closing the terminal, but does not automatically start after a reboot. Run the foreground command under your preferred process manager for unattended hosting. The service binds to loopback for personal use.
 
-- Enter a ticker, including exchange suffixes such as `SHOP.TO` or symbols such as `BRK-B`, then choose 3 months through 10 years of daily history. Bookmark ticker-specific views, e.g. `http://127.0.0.1:8766/?ticker=AMZN&range=5y`.
+- Enter a ticker and press **Enter**, including exchange suffixes such as `SHOP.TO` or symbols such as `BRK-B`. Changing the History or Candles dropdown automatically updates the chart. Choose 3 months through 10 years of daily history. Bookmark ticker-specific views, e.g. `http://127.0.0.1:8766/?ticker=AMZN&range=5y`.
 - Daily OHLC candles appear above daily share-volume bars. Hover for OHLCV, scroll or use +/− to zoom, drag or use arrow keys to pan, and double-click or press Home to reset. Linear/log price scales and PNG downloads are included. Recent bars also appear in an accessible table.
 - The **Candles** dropdown switches immediately between daily, weekly (Monday-start weeks), and monthly candles. Weekly/monthly bars use the first open, highest high, lowest low, last close, and summed daily volume. Boundary periods may be partial. The profile continues to use underlying daily bars in the visible date range. The selected interval is preserved in the URL and PNG export. Hover shows an OHLCV tooltip and the cursor price on the right axis, including in logarithmic mode.
 - The left-hand volume profile recalculates for the **visible date range**. Each day's volume is distributed uniformly across its low–high range, allocated to price bins by overlap. Flat days allocate all volume to one bin. The gold point-of-control line marks the center of the largest estimated bin. This conserves volume but **is not exact volume-at-price**; exact profiles require intraday/trade-level data. Candle colors reflect close versus open, not buy/sell aggressor flow.
@@ -33,4 +33,14 @@ PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s tests -p 'test_chart_s
 node tests/test_chart_math.js
 node --check chart_web/chart.js
 ```
+
+## Historical forward P/E
+
+The additional valuation panel loads automatically with the ticker and history range, follows price-chart zoom/pan, and offers hover details and keyboard inspection (focus the panel and use Left/Right). Its units are earnings multiples (`×`); the latest value shows its observation date. The separate forward P/E request does not block the price chart.
+
+Source: Yahoo Finance's historical valuation endpoint, using **monthlyForwardPeRatio** supplemented by **quarterlyForwardPeRatio**. Monthly values take precedence on overlapping dates. The chart draws reported observations and dotted connectors, without creating daily values or extending a value beyond its observation date. It never substitutes trailing P/E or divides old prices by today's earnings estimate. Nonpositive or missing ratios are omitted. Coverage may be shorter than the requested history, and ETFs such as SOXX may not have this series. Empty coverage and connection errors are displayed separately; errors offer a retry button.
+
+The provider can revise historical values, so this is **not a point-in-time backtest dataset**. The provider's forward earnings basis is retained without relabeling it as next-twelve-month or next-fiscal-year earnings. No paid API or extra dependency is required.
+
+`GET /api/forward-pe?ticker=AMZN&range=5y` returns dated observations, frequency, source, retrieval time, and coverage status. Results are cached separately for one hour (32 ticker/range combinations). Endpoint failures return 502, while a successful response with no observations returns 200 and `status: "unavailable"`.
 

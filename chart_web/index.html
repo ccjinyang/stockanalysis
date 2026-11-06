@@ -5,17 +5,16 @@
   <title>Volume Atlas — Stock charts</title>
   <meta name="description" content="Daily stock charts with volume and an estimated volume profile.">
   <link rel="stylesheet" href="/styles.css">
-  <script defer src="/math.js"></script><script defer src="/chart.js"></script>
+  <script defer src="/math.js"></script><script defer src="/pe.js"></script><script defer src="/chart.js"></script>
 </head>
 <body>
   <header class="masthead"><a class="brand" href="/"><span class="mark">▥</span> Volume Atlas</a><span class="eyebrow">PRICE HAS A HISTORY. VOLUME LEAVES A TRACE.</span><span class="local">● LOCAL RESEARCH</span></header>
   <main>
     <section class="intro"><div><p class="eyebrow">THE MARKET, IN CONTEXT</p><h1>See where the trading happened.</h1><p class="muted">Price action. Trading activity. A different view of every level.</p></div><div class="edition">01 / STOCK EXPLORER<br><span>Daily / weekly / monthly · Volume profile</span></div></section>
     <form id="search" class="toolbar">
-      <label class="ticker-label" for="ticker">TICKER <input id="ticker" name="ticker" maxlength="20" value="AMZN" placeholder="AMZN" required autocomplete="off" spellcheck="false"></label>
+      <label class="ticker-label" for="ticker">TICKER <input id="ticker" name="ticker" maxlength="20" value="AMZN" placeholder="AMZN" title="Enter a ticker and press Enter" required autocomplete="off" spellcheck="false"></label>
       <label for="range">HISTORY <select id="range"><option value="3mo">3 months</option><option value="6mo">6 months</option><option value="1y">1 year</option><option value="2y">2 years</option><option value="5y" selected>5 years</option><option value="10y">10 years</option></select></label>
       <label for="interval">CANDLES <select id="interval"><option value="daily">Daily</option><option value="weekly">Weekly</option><option value="monthly">Monthly</option></select></label>
-      <button id="load" class="primary" type="submit">Generate chart ↗</button>
       <div class="toolbar-spacer"></div><label class="check"><input id="auto" type="checkbox"> Refresh every 5 min</label>
       <button id="export" type="button" disabled>Download PNG ↓</button>
     </form>
@@ -26,6 +25,13 @@
       <div class="canvas-wrap"><canvas id="chart" tabindex="0" aria-label="Candlestick chart with estimated volume profile and volume. Use plus and minus to zoom, arrow keys to pan, and Home to reset."></canvas><div id="empty">Your next perspective starts with a ticker.</div><div id="candle-tooltip" role="tooltip" hidden><strong id="tooltip-date"></strong><div><span>Open</span><b id="tooltip-open"></b></div><div><span>High</span><b id="tooltip-high"></b></div><div><span>Low</span><b id="tooltip-low"></b></div><div><span>Close</span><b id="tooltip-close"></b></div><div><span>Volume</span><b id="tooltip-volume"></b></div></div></div>
       <div id="readout" class="readout" aria-live="off">Hover over a trading day to inspect open, high, low, close, and volume.</div>
       <div class="chart-footer"><span id="dates">—</span><span>Scroll to zoom · Drag to pan · Double-click to reset</span></div>
+    </section>
+    <section class="chart-card pe-card" aria-labelledby="pe-title">
+      <div class="quote-row"><div><div class="symbol-line"><h2 id="pe-title">Historical Forward P/E</h2><span class="tag">REPORTED OBSERVATIONS</span></div><p class="muted">Share price relative to forecast earnings · Follows the visible price-chart range</p></div><div class="quote"><strong id="pe-latest">—</strong><span id="pe-asof">No observation selected</span></div></div>
+      <div class="pe-wrap"><canvas id="pe-chart" tabindex="0" aria-label="Historical forward price-to-earnings observations. Use left and right arrow keys to inspect observations."></canvas><div id="pe-empty" role="status" aria-live="polite">Load a ticker to view its available valuation history.</div><div id="pe-tooltip" role="tooltip" hidden></div></div>
+      <div class="readout" id="pe-readout">Only reported observations are shown; missing dates are not filled.</div>
+      <div class="chart-footer"><span id="pe-source">Yahoo Finance · Forward P/E</span><button id="pe-retry" type="button" hidden>Retry valuation data</button></div>
+      <p class="pe-note">Monthly observations supplemented by quarterly values. Dotted lines connect reported points, not daily estimates. Coverage can be shorter than the requested history. Provider values may be revised; this is not a point-in-time backtest dataset.</p>
     </section>
     <section class="metrics" aria-label="Visible range statistics"><div><span>VISIBLE RANGE VOLUME</span><strong id="total-volume">—</strong><small>Shares traded across displayed days</small></div><div><span>ESTIMATED POINT OF CONTROL</span><strong id="poc">—</strong><small>Price bin with the most estimated volume</small></div><div><span>LATEST DAY VOLUME</span><strong id="day-volume">—</strong><small id="volume-ratio">Relative to previous 20 available days</small></div></section>
     <details class="method"><summary>How to read this chart <span>＋</span></summary><div class="method-grid"><p><b>Bottom bars: volume by candle.</b> Taller bars show more shares traded in the selected day, week, or month. Weekly candles group Monday-start weeks; monthly candles group calendar months. Periods at the edges may be partial. Green means the close was at or above the open; red means it was below. They do not measure buying versus selling.</p><p><b>Left bars: estimated volume by price.</b> Each day's volume is distributed uniformly from its low to its high, weighted by overlap with each price bin. The profile recalculates as you zoom or pan. It is an approximation, not transaction-level volume.</p><p><b>Gold line: point of control.</b> The center of the highest-volume estimated bin. This is a historical reference, not a predicted support level. Prices use the provider's split-adjusted OHLC without dividend adjustment; the newest daily bar may still be forming.</p></div></details>
